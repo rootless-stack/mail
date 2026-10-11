@@ -1,0 +1,21 @@
+# Copy to ~/vars.toml and adapt.  Rendered into the config by render.py
+# together with the files in ~/secrets (as `secret.<name>`).
+
+# Your main domain: postmaster@ for quota warnings, sieve@ for Sieve mail.
+primary_domain = "example.org"
+# The name in your MX record; it must match the certificate in ~/certs.
+mail_hostname = "mail.example.org"
+# Every domain this server receives mail for.  Each one also needs a
+# `domain-<name>` group in lldap, or postfix rejects its recipients.
+mail_domains = ["example.org"]
+# DKIM: ~/secrets/dkim/<domain>.<selector>.key, one per mail domain.
+dkim_selector = "mail"
+
+ldap_base_dn = "dc=example,dc=org"
+# A read-only lldap user (member of lldap_strict_readonly); its password
+# goes into ~/secrets/ldap_readonly_password.
+ldap_readonly_dn = "uid=readonly,ou=people,dc=example,dc=org"
+lldap_ldap_uri = "ldapi://%2Frun%2Frootless-ipc%2Flldap%2Fldap%2Fldap.sock"
+
+# A DNSSEC-validating resolver on the host.  DANE stays off without one.
+dns_resolvers = ["127.0.0.1"]

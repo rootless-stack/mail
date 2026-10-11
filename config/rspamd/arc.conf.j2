@@ -1,0 +1,17 @@
+# rspamd local.d/arc.conf — ARC signing (mirrors DKIM config)
+enabled = true;
+use_domain = "header";
+use_esld = true;
+
+# Mirror dkim_signing.conf — postfix's sender_login_maps already gates
+# auth-user vs From, so ARC should sign alias submissions too.
+allow_username_mismatch = true;
+
+{% for domain in mail_domains %}
+domain {
+  "{{ domain }}" {
+    selector = "{{ dkim_selector }}";
+    path     = "/etc/rspamd/dkim/{{ domain }}.{{ dkim_selector }}.key";
+  }
+}
+{% endfor %}

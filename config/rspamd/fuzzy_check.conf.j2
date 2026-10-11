@@ -1,0 +1,35 @@
+# rspamd local.d/fuzzy_check.conf — local fuzzy-hash CHECK rule
+#
+# Queries the local fuzzy worker (see worker-fuzzy.inc.j2) over UDP 11335
+# inside the rspamd container, lookups against the hashes trained via
+# IMAPSieve when users move mail in/out of Junk.  The public rspamd.com
+# fuzzy storage stays configured by rspamd's built-in defaults — this rule
+# is in addition to it, not a replacement.
+
+rule "FUZZY_LOCAL" {
+    # Local fuzzy worker lives in the same container; UDP localhost is fine.
+    servers = "127.0.0.1:11335";
+
+    # Read+write: this rule is the target of the controller's /fuzzyadd
+    # endpoint called from dovecot's learn-spam.sh on IMAP Junk moves.
+    read_only = no;
+
+    # Match what the worker stores under.
+    algorithm = "mumhash";
+
+    # Floor for what we even try to match — below 500 bytes is too noisy
+    # (short replies look fuzzy-similar to half the corpus), below 10 words
+    # in a text part is rspamd's recommended minimum.
+    min_bytes  = 500;
+    min_length = 10;
+
+    # Skip flags that aren't listed below (defensive — we know only flag 1).
+    skip_unknown = yes;
+
+    # Flag → symbol mapping.  We use a single flag (1 = user-trained spam);
+    # the optional FUZZY_PROB / FUZZY_WHITE flags from rspamd's defaults are
+    # not used here, the public rspamd.com check rule supplies those.
+    fuzzy_map = {
+        FUZZY_LOCAL_DENIED = { max_score = 12.0; flag = 1; }
+    }
+}

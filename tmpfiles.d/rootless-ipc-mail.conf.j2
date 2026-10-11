@@ -1,0 +1,35 @@
+# /etc/tmpfiles.d/rootless-ipc-mail.conf, rendered by render.py.
+# The mail stack's socket directories, and its access to lldap.
+#
+# Containers that drop to an unprivileged uid inside (postfix 100,
+# dovecot 90, vmail 5000) reach these directories as that uid's mapped
+# host uid, so each grant names it.  Grants on other stacks' directories
+# are appended (a+): removing this file and rebooting revokes them.
+{% set postfix = 'mail-svc' | subuid(100) %}
+{% set dovecot = 'mail-svc' | subuid(90) %}
+{% set vmail = 'mail-svc' | subuid(5000) %}
+
+# LMTP, SASL, tlspol and postfwd sockets: dovecot, tlspol and postfwd bind
+# as mail-svc; postfix's workers connect.
+d  /run/rootless-ipc/mail               0750 mail-svc mail-svc - -
+a+ /run/rootless-ipc/mail               - - - - u:{{ postfix }}:rx
+
+# Rspamd's milter: postfix only.
+d  /run/rootless-ipc/rspamd-milter      0750 mail-svc mail-svc - -
+a+ /run/rootless-ipc/rspamd-milter      - - - - u:{{ postfix }}:rx
+
+# Rspamd's controller: trusts every peer and has no password, so this
+# directory is its only gate.  Dovecot's Sieve (vmail) sends spam/ham
+# training here.
+d  /run/rootless-ipc/rspamd-controller  0750 mail-svc mail-svc - -
+a+ /run/rootless-ipc/rspamd-controller  - - - - u:{{ vmail }}:rx
+
+# Postfix's listener for Sieve vacation replies and redirects.  Its master
+# binds it as postfix and refuses a directory it does not own.
+d  /run/rootless-ipc/sieve-submit       0750 {{ postfix }} {{ postfix }} - -
+a+ /run/rootless-ipc/sieve-submit       - - - - u:{{ vmail }}:rx
+
+# lldap (ldap stack): postfix's lookups and dovecot's auth connect;
+# mail-svc itself must traverse too, for podman to set up the mount.
+a+ /run/rootless-ipc/lldap              - - - - u:mail-svc:rx,u:{{ postfix }}:rx,u:{{ dovecot }}:rx
+a+ /run/rootless-ipc/lldap/ldap         - - - - u:mail-svc:rx,u:{{ postfix }}:rx,u:{{ dovecot }}:rx

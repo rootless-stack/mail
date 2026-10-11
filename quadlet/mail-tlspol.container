@@ -1,0 +1,49 @@
+[Unit]
+Description=mail: DANE/MTA-STS policy resolver (postfix smtp_tls_policy_maps)
+PartOf=mail.service
+Before=mail.service
+
+[Container]
+Image=docker.io/zuplu/postfix-tlspol:v1.14@sha256:d3f57defe45e32bebf432c5560d080af884d427e93ab53cbee49fbb28be21d5a
+ContainerName=mail-tlspol
+# The binary alone: the image's entrypoint would also start a bundled
+# resolver next to the host's.
+Entrypoint=/usr/bin/postfix-tlspol
+Exec=-config /etc/postfix-tlspol/config.yaml
+# The image's user (1000) is mail-svc, the owner of /run/rootless-ipc/mail.
+UserNS=keep-id:uid=1000,gid=1000
+DropCapability=ALL
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+Memory=128m
+# Host network: DANE needs the host's validating resolver, which may
+# listen on loopback only.  Serves only its Unix socket.
+Network=host
+# Postfix's resolver list; tlspol asks its first nameserver.
+Volume=%h/config/postfix/resolv.conf:/etc/resolv.conf:ro,z
+Volume=%h/config/tlspol/config.yaml:/etc/postfix-tlspol/config.yaml:ro,Z
+Volume=/run/rootless-ipc/mail:/run/rootless-ipc/mail:z
+Tmpfs=/var/lib/postfix-tlspol:mode=1777,size=32m,noexec
+# -dump asks the running server over its socket, so a resolver hiccup
+# cannot get the container killed.
+HealthCmd=["/bin/sh", "-c", "/usr/bin/postfix-tlspol -config /etc/postfix-tlspol/config.yaml -dump >/dev/null"]
+HealthStartupCmd=["/bin/sh", "-c", "/usr/bin/postfix-tlspol -config /etc/postfix-tlspol/config.yaml -dump >/dev/null"]
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=5s
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=30s
+Notify=healthy
+HealthOnFailure=kill
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=mail.service

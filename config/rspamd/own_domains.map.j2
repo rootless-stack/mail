@@ -1,0 +1,5 @@
+# rspamd local.d/own_domains.map — our mail domains (multimap FROM_OWN_DOMAIN)
+# Rendered from mail_domains.
+{% for domain in mail_domains %}
+{{ domain }}
+{% endfor %}

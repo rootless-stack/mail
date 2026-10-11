@@ -1,0 +1,9 @@
+[Unit]
+Description=mail: watch ~/certs for a renewed certificate
+
+[Path]
+PathChanged=%h/certs/fullchain.pem
+Unit=mail-certs.service
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,13 @@
+# LDAP map: virtual domains
+# Returns the domain name if it's a valid virtual domain hosted on this server.
+
+server_host   = {{ lldap_ldap_uri }}
+version       = 3
+bind          = yes
+bind_dn       = {{ ldap_readonly_dn }}
+bind_pw       = {{ secret.ldap_readonly_password }}
+search_base   = ou=groups,{{ ldap_base_dn }}
+query_filter  = (&(objectClass=groupOfUniqueNames)(cn=domain-%s))
+result_attribute = cn
+# We just need a non-empty result to indicate the domain is valid
+result_format = %s

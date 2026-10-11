@@ -1,0 +1,31 @@
+# submission_header_checks — applied via the `submission-cleanup` service in
+# master.cf for authenticated submissions only (ports 465 + 587).  Inbound
+# MX traffic still uses the default `cleanup` and is NOT affected by this
+# file, so spam-filter Received-path checks on inbound mail stay intact.
+#
+# Goal: prevent locally-authenticated outbound mail from leaking the
+# submitting user's home IP, reverse DNS, or MUA-added X-Originating-IP.
+# Postfix's outbound `smtp` client adds a fresh single-line Received: when
+# it relays the queued message to the recipient's MX — so the recipient
+# still sees a Received chain, but it starts at *this server* rather than
+# at the user's residential IP.
+#
+# Rule format: PCRE — postfix matches each logical header against every
+# pattern, top-down.  `IGNORE` silently drops the matched header.  Patterns
+# are anchored at start-of-header (the leading `^` is implicit but added
+# here for readability).
+
+# 1. Drop the client-side Received header.  Postfix's authenticated
+#    submission service tags its own Received with the ESMTPSA keyword
+#    (RFC 3848 §4: "SMTP Authentication" → "ESMTPSA").  Matching on that
+#    keyword is safer than `^Received:.*from` because it only deletes
+#    Receiveds *we* generated for SASL submissions; relay-injected
+#    Receiveds from other hops (none for submission, but defence in
+#    depth) keep their normal form `ESMTP` / `ESMTPS` and are untouched.
+/^Received:.*\bwith ESMTPSA\b/   IGNORE
+
+# 2. Drop X-Originating-IP if the MUA added one (Outlook, some Webmails).
+/^X-Originating-IP:/             IGNORE
+
+# 3. Drop any client-leaked X-Forwarded-For chain.
+/^X-Forwarded-For:/              IGNORE

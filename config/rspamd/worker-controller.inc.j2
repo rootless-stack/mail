@@ -1,0 +1,13 @@
+# rspamd local.d/worker-controller.inc — web UI + CLI access
+# oauth2-proxy (mail-auth) and Dovecot reach this socket through the
+# controller IPC dir.
+
+bind_socket = "/run/rootless-ipc/rspamd-controller/controller.sock mode=0666";
+
+# No password: a Unix-socket peer with no X-Forwarded-For/X-Real-IP is
+# trusted without one, so it only ever gated callers that chose to send
+# those headers — the directory ACL is the boundary for every caller.
+# The WebUI's login is oauth2-proxy (NextCloud OIDC); Caddy strips the
+# headers for spam.<domain>.  Never add a TCP listener: with no password
+# and no secure_ip, rspamd admits any TCP peer.
+secure_ip = [];

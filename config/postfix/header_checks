@@ -1,0 +1,15 @@
+# Header checks (PCRE, case-insensitive) — every cleanup service runs them,
+# inbound MX mail and authenticated submission alike (master.cf).
+#
+# Internal routing header: only fetchmail's LMTP delivery may set it
+# (delivery-rules.sieve files mail into the folder it names).  From SMTP it
+# is the sender's choice of folder for their own message — Trash, or past
+# the recipient's own Sieve rules.  The validate:postfix job pins this rule.
+/^X-Deliver-To-Folder[[:space:]]*:/ IGNORE
+
+# Strip privacy-leaking headers from outgoing mail
+/^Received:.*with ESMTPSA/ IGNORE
+/^X-Originating-IP:/ IGNORE
+/^X-Mailer:/ IGNORE
+/^X-Forwarded-To:/ IGNORE
+/^Resent-Date:/ IGNORE

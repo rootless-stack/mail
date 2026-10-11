@@ -1,0 +1,61 @@
+[Unit]
+Description=mail: dovecot
+PartOf=mail.service
+Before=mail.service
+Wants=mail-rspamd.service
+After=mail-rspamd.service
+
+[Container]
+Image=ghcr.io/rootless-stack/dovecot:alpine3.24
+ContainerName=mail-dovecot
+# Starts as root (= mail-svc) and drops privileges per process.  The master
+# chowns sockets (CHOWN, FOWNER), changes and signals worker identities
+# (SETUID, SETGID, KILL), and login processes chroot (SYS_CHROOT).
+DropCapability=ALL
+AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETUID SETGID SYS_CHROOT
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+# Staged TLS copies and compiled Sieve binaries (read, never executed).
+# The sieve-pipe scripts run from the read-only config mount instead.
+Tmpfs=/tmp:mode=1777,size=64m,noexec
+Tmpfs=/run/dovecot:mode=0755,size=16m,noexec
+Tmpfs=/var/lib/dovecot:mode=0755,size=1m,noexec
+Memory=512m
+# Host network: IMAPS (993) and ManageSieve (4190) see real client
+# addresses, for logs and brute-force blocking.  LMTP and SASL are Unix
+# sockets.
+Network=host
+Volume=%h/config/dovecot:/etc/dovecot:ro,Z
+# Maildirs, owned by vmail (5000) inside the container.
+Volume=%h/data/vmail:/var/mail/vmail:Z
+Volume=%h/certs:/etc/ssl/mail:ro,z
+# lmtp.sock and auth-client.sock for postfix.
+Volume=/run/rootless-ipc/mail:/run/rootless-ipc/mail:z
+Volume=/run/rootless-ipc/rspamd-controller:/run/rootless-ipc/rspamd-controller:z
+# Postfix's listener for Sieve vacation replies and redirects (msmtp).
+Volume=/run/rootless-ipc/sieve-submit:/run/rootless-ipc/sieve-submit:z
+# lldap's LDAP socket.  No relabel option: the directory belongs to
+# ldap-svc, and the ldap stack labels it.
+Volume=/run/rootless-ipc/lldap/ldap:/run/rootless-ipc/lldap/ldap:ro
+HealthCmd=["doveadm", "log", "errors"]
+HealthStartupCmd=["doveadm", "log", "errors"]
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=5s
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=1m
+Notify=healthy
+HealthOnFailure=kill
+StopTimeout=30
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=mail.service

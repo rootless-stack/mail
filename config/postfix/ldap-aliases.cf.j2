@@ -1,0 +1,14 @@
+# LDAP map: virtual aliases
+# Returns the owner's `mail` for a `mailAlias` entry — and for a real
+# mailbox address itself (identity result), so that a lookup for a real
+# mailbox is a HIT here and never reaches the regexp mirror rules that
+# follow in main.cf's virtual_alias_maps chain.
+
+server_host   = {{ lldap_ldap_uri }}
+version       = 3
+bind          = yes
+bind_dn       = {{ ldap_readonly_dn }}
+bind_pw       = {{ secret.ldap_readonly_password }}
+search_base   = ou=people,{{ ldap_base_dn }}
+query_filter  = (&(objectClass=person)(|(mail=%s)(mailAlias=%s)))
+result_attribute = mail

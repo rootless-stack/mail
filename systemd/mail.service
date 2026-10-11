@@ -1,0 +1,11 @@
+[Unit]
+Description=rootless-stack: mail
+# The stack's anchor; see ldap.service.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+
+[Install]
+WantedBy=default.target

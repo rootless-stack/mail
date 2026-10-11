@@ -1,0 +1,3 @@
+# MIME header checks — block dangerous attachment types
+/^Content-Type:.*name\s*=.*\.(pif|bat|exe|com|scr|vbs|js)\s*$/i REJECT Dangerous file attachment
+/^Content-Disposition:.*filename\s*=.*\.(pif|bat|exe|com|scr|vbs|js)\s*$/i REJECT Dangerous file attachment

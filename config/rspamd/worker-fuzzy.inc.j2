@@ -1,0 +1,49 @@
+# rspamd local.d/worker-fuzzy.inc — local fuzzy-hash storage worker
+#
+# Fronts the per-instance Redis (DB 6) with the rspamd-fuzzy UDP protocol.
+# The fuzzy_check module (see fuzzy_check.conf.j2) and the controller's
+# /fuzzyadd /fuzzydel HTTP endpoints both communicate with this worker on
+# 127.0.0.1:11335 inside the rspamd container — no exposure to host or
+# other containers.
+#
+# Redis DB allocation (must stay disjoint per module, since each module
+# treats its db number as an isolated namespace):
+#   2 = history (scan log)
+#   3 = greylist
+#   5 = neural-net
+#   6 = local fuzzy        ← this file
+#   default (0) = bayes + everything else
+
+# Enable the worker.  Upstream's etc/rspamd/worker-fuzzy.inc ships with
+# `count = -1;` (disabled), and local.d merges field-by-field rather than
+# replacing the stanza — so without an explicit positive count here the
+# fuzzy worker never starts, and 127.0.0.1:11335 stays unbound (controller
+# /fuzzyadd lookups fail with ECONNREFUSED).  One process is enough; the
+# worker is UDP and effectively stateless beyond Redis.
+count = 1;
+
+backend = "redis";
+servers  = "redis:6379";
+password = "{{ secret.redis_password }}";
+db       = 6;
+
+bind_socket = "*:11335";
+
+# `allow_update` controls which clients are permitted to add/update/delete
+# fuzzy hashes (vs. read-only fuzzy_check queries).  Required so the
+# IMAPSieve-driven /fuzzyadd POSTs to the controller can forward as
+# fuzzy-protocol UPDATE messages through this worker.  Loopback + Podman's
+# default rootless bridge subnet (10.89.0.0/16) cover the rspamd
+# self-traffic + the dovecot container in the same mail-net project.
+allow_update = ["127.0.0.0/8", "10.89.0.0/16"];
+
+# How long a hash persists if not refreshed.  90d matches the bayes /
+# neural retention horizon — long enough that user-trained spam patterns
+# stay effective across vacation/quiet periods, short enough that a
+# false-positive train can age out without manual cleanup.
+expire = 90d;
+
+# Mumhash is rspamd's default and what the global `rspamd.com` public
+# fuzzy storage uses; keep it here so locally-trained hashes are
+# byte-compatible with the public ones.
+algorithm = "mumhash";

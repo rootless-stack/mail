@@ -1,0 +1,45 @@
+[Unit]
+Description=mail: postfwd (daily outbound cap, postfix policy service)
+PartOf=mail.service
+Before=mail.service
+
+[Container]
+Image=ghcr.io/rootless-stack/postfwd:alpine3.24
+ContainerName=mail-postfwd
+# Alpine's postfwd user (100:101) is mail-svc, the owner of
+# /run/rootless-ipc/mail.
+UserNS=keep-id:uid=100,gid=101
+DropCapability=ALL
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+Tmpfs=/tmp:mode=1777,size=8m,noexec
+Memory=128m
+# Every rule is local and postfix talks to its socket: no network at all.
+Network=none
+Volume=%h/config/postfwd:/etc/postfwd:ro,Z
+# Rate counters, saved on stop and loaded on start.
+Volume=%h/data/postfwd:/var/lib/postfwd:Z
+Volume=/run/rootless-ipc/mail:/run/rootless-ipc/mail:z
+HealthCmd=["/usr/local/bin/postfwd-health"]
+HealthStartupCmd=["/usr/local/bin/postfwd-health"]
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=5s
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=30s
+Notify=healthy
+HealthOnFailure=kill
+# postfwd saves its counters on SIGTERM; don't kill it mid-write.
+StopTimeout=30
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=mail.service

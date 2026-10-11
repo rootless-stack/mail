@@ -1,0 +1,17 @@
+# LDAP map: virtual mailboxes
+# Returns "domain/user/Maildir/" to confirm a valid local mailbox exists.
+
+server_host   = {{ lldap_ldap_uri }}
+version       = 3
+bind          = yes
+bind_dn       = {{ ldap_readonly_dn }}
+bind_pw       = {{ secret.ldap_readonly_password }}
+search_base   = ou=people,{{ ldap_base_dn }}
+query_filter  = (&(objectClass=person)(mail=%s))
+result_attribute = mail
+# Map the email address to a maildir path segment for virtual_mailbox_base.
+# %d = domain part, %u = localpart (postfix's split, NOT the full address —
+# postfix's %u is the localpart while Dovecot's %u is the full address; the
+# two finally line up at %d/<localpart>/Maildir/, which is what Dovecot's
+# userdb home=/var/mail/vmail/%d/%n produces on the delivery side).
+result_format = %d/%u/Maildir/

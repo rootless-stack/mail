@@ -1,0 +1,9 @@
+# Mounted over /etc/resolv.conf in the postfix and tlspol containers.
+# DANE (smtp_tls_security_level = dane) needs a VALIDATING resolver that
+# sets the AD bit.  A stub without DNSSEC (systemd-resolved's default)
+# never does: every TLSA lookup is then "insecure", and postfix silently
+# falls back to opportunistic TLS.
+{% for r in dns_resolvers %}
+nameserver {{ r }}
+{% endfor %}
+options timeout:2 attempts:2

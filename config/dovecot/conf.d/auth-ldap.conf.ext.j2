@@ -1,0 +1,81 @@
+# auth-ldap.conf.ext — LDAP passdb + userdb
+#
+# Dovecot 2.4 collapsed the old two-file split (auth-ldap.conf.ext include
+# pointing at a separate /etc/dovecot/dovecot-ldap.conf for connection
+# details) into a single inline block.  Connection details are now
+# top-level `ldap_*` settings; passdb/userdb sections take their filter
+# and field mappings inline.
+#
+# lldap (the ldap stack) is reached through its relay socket, mounted into
+# this container; the directory ACL admits the mapped dovecot uid.
+
+ldap_uris             = {{ lldap_ldap_uri }}
+ldap_version          = 3
+ldap_auth_dn          = {{ ldap_readonly_dn }}
+ldap_auth_dn_password = {{ secret.ldap_readonly_password }}
+ldap_base             = ou=people,{{ ldap_base_dn }}
+ldap_scope            = subtree
+
+# ── passdb ────────────────────────────────────────────────────────────────
+# Password lookup: bind as the user to verify credentials.
+# `bind = yes` means Dovecot binds as the user with their password directly,
+# which is the cleanest approach and avoids storing hashed passwords here.
+#
+# Username canonicalisation: the client may submit *either* of two forms —
+#   1. the full canonical email address      e.g. `jane@example.org`
+#      → matched on the LDAP `mail` attribute
+#   2. the lldap username (uid attribute)    e.g. `jane.doe`
+#      → matched on the LDAP `uid` attribute
+# The bare email *local part* (`jane` on its own) is NOT accepted on
+# purpose: with several mail domains it would be ambiguous.  Keep lldap
+# uids distinct from bare local parts (e.g. `first.last`), so the
+# `uid=%{user}` arm never silently matches a local-part guess.
+#
+# After a successful bind we rewrite the dovecot session user to the LDAP
+# `mail` value so every downstream lookup (userdb, postfix
+# sender_login_maps via the same SASL identity, quota, sieve) sees one
+# stable identity regardless of which of the two forms the client typed.  Without that rewrite `%{user|domain}` /
+# `%{user|username}` in userdb below would explode on a bare-uid input
+# (no `@`).
+passdb ldap {
+  bind   = yes
+  filter = (&(objectClass=person)(|(mail=%{user})(uid=%{user})))
+
+  # `user` is the Dovecot-special field that rewrites the session
+  # username to the LDAP `mail` attribute after the bind.
+  fields {
+    user = %{ldap:mail}
+  }
+}
+
+# ── userdb (single block) ─────────────────────────────────────────────────
+# One userdb for every user: home/uid/gid/quota only.
+#
+# FOOTGUN: `userdb ldap { }` is a NAMED section (`ldap` = the name, driver
+# defaults to it) and Dovecot 2.4 MERGES same-named sections into one —
+# scalar keys last-wins, `fields {}` unioned.  A second block with another
+# filter needs a distinct name (`userdb other { driver = ldap … }`); check
+# with `doveconf -n userdb` that exactly the intended blocks come out.
+userdb ldap {
+  filter = (&(objectClass=person)(mail=%{user}))
+  # An LDAP error must hard-fail the lookup, never silently degrade.
+  result_internalfail = return-fail
+  # User enumeration for `doveadm user '*'` / `-A` (migration mirror,
+  # quota reports).  Without it doveadm can't list users at all.
+  # `*@svc.invalid` = lldap service binds (admin, svc-readonly) — not
+  # mailboxes; iterating them made every doveadm-sync run end in
+  # "User lookup failed" (exit 77).
+  iterate_filter = (&(objectClass=person)(mail=*)(!(mail=*@svc.invalid)))
+  iterate_fields {
+    user = %{ldap:mail}
+  }
+  fields {
+    home = /var/mail/vmail/%{user | domain}/%{user | username}
+    uid  = 5000
+    gid  = 5000
+    # Per-account quota in bytes; unset → 90-plugin.conf's 1 GiB.  The
+    # default() is required: a missing attribute otherwise fails the whole
+    # lookup (mail to that account deferred).  2.4 ignores 2.3's quota_rule.
+    quota_storage_size = %{ldap:mailQuotaBytes | default(1073741824)}B
+  }
+}

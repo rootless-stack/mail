@@ -1,0 +1,25 @@
+# LDAP map: authenticated sender login mapping
+# Ensures the SASL-authenticated user matches the MAIL FROM address.
+#
+# Returns `mail` (the full address) rather than the bare `uid`: Dovecot SASL
+# passes the full login string (e.g. jane@example.org) through to postfix, so
+# the value returned here has to be the full address for the SASL-identity ↔
+# MAIL FROM match to succeed.  Returning bare `uid` would reject every
+# authenticated submission as a sender-login mismatch.
+#
+# The query_filter matches a candidate MAIL FROM against both the primary
+# `mail` and any `mailAlias` entries — so a user authenticated as
+# jane@example.org can also submit From: jane@example.net (or any other
+# alias the operator has added) and postfix sees `mail` = jane@example.org
+# returned, which equals the SASL identity → accepted.  Without the
+# mailAlias arm, every submission from an alias address would be rejected
+# as a sender-login mismatch.
+
+server_host   = {{ lldap_ldap_uri }}
+version       = 3
+bind          = yes
+bind_dn       = {{ ldap_readonly_dn }}
+bind_pw       = {{ secret.ldap_readonly_password }}
+search_base   = ou=people,{{ ldap_base_dn }}
+query_filter  = (&(objectClass=person)(|(mail=%s)(mailAlias=%s)))
+result_attribute = mail

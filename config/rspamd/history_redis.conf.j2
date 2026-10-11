@@ -1,0 +1,13 @@
+# rspamd local.d/history_redis.conf — scan-history backing store
+# Templated only because `password` needs to be
+# inlined from a secret (rspamd's UCL doesn't reliably expand env vars in
+# per-module config).  Unlike `neural`, this module DOES inherit `servers`
+# from the global `redis` section in redis.conf.j2 — setting it here trips
+# the per-module schema validator with "plugin history_redis is misconfigured"
+# because `servers` (and the legacy `backend` key) are not part of the
+# declared schema for this plugin.
+
+password = "{{ secret.redis_password }}";
+db       = 2;          # Redis DB for scan history
+nrows    = 200;        # rows kept per key
+compress = true;       # zstd compression

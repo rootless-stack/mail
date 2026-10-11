@@ -1,0 +1,46 @@
+# rspamd local.d/neural.conf — neural-net spam classifier
+#
+# Templated rather than rsync'd because:
+#   1. the password needs to be inlined (rspamd's UCL doesn't reliably pull
+#      env vars into the per-module config), and
+#   2. the global `redis` section from local.d/redis.conf is NOT inherited
+#      by the neural plugin — every module that uses Redis directly has to
+#      carry its own connection params.  Confirmed via `rspamadm configdump
+#      neural` after deploying redis.conf.j2 alone, which still produced
+#      `cannot get ANNs list from redis: NOAUTH Authentication required.`
+
+servers  = "redis:6379";
+password = "{{ secret.redis_password }}";
+db       = 5;          # Redis DB number for neural-net models (separate
+                       # from bayes/greylist/history, each on its own DB).
+
+enabled = true;
+
+rules {
+    "LONG" {
+        train {
+            max_trains    = 5000;
+            max_usages    = 200;
+            max_iterations = 25;
+            learning_rate = 0.01,
+            spam_score    = 8;
+            ham_score     = -2;
+        }
+        symbol_spam = "NEURAL_SPAM_LONG";
+        symbol_ham  = "NEURAL_HAM_LONG";
+        ann_expire  = 100d;
+    }
+    "SHORT" {
+        train {
+            max_trains    = 100;
+            max_usages    = 2;
+            max_iterations = 25;
+            learning_rate = 0.01,
+            spam_score    = 8;
+            ham_score     = -2;
+        }
+        symbol_spam = "NEURAL_SPAM_SHORT";
+        symbol_ham  = "NEURAL_HAM_SHORT";
+        ann_expire  = 1d;
+    }
+}

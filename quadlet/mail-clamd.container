@@ -1,0 +1,48 @@
+[Unit]
+Description=mail: clamd (ClamAV)
+PartOf=mail.service
+Before=mail.service
+
+[Container]
+Image=ghcr.io/rootless-stack/clamd:alpine3.24
+ContainerName=mail-clamd
+# Alpine's clamav user (100:101) is mail-svc on the host.
+UserNS=keep-id:uid=100,gid=101
+DropCapability=ALL
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+# Socket, pid, the rendered fangfrisch.conf and scan scratch.  1777:
+# podman does not remap a tmpfs into the keep-id namespace.
+Tmpfs=/run/clamav:mode=1777,size=4m,noexec
+Tmpfs=/etc/fangfrisch:mode=1777,size=1m,noexec
+Tmpfs=/tmp:mode=1777,size=512m,noexec
+# Signature databases take ~1.2 GB, and a reload briefly holds two sets.
+Memory=3g
+Network=mail.network
+NetworkAlias=clamd
+Volume=%h/data/clamav:/var/lib/clamav:Z
+# fangfrisch's per-feed state, so a restart does not re-download every feed.
+Volume=%h/data/fangfrisch:/var/lib/fangfrisch:Z
+# Optional third-party feeds: add the secret mounts in a drop-in (README).
+HealthCmd=["clamdscan", "--ping", "3"]
+HealthStartupCmd=["clamdscan", "--ping", "3"]
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=10s
+HealthInterval=60s
+HealthTimeout=10s
+HealthRetries=3
+# Loading signatures can take minutes.  Postfix waits for ClamAV to answer.
+HealthStartPeriod=5m
+Notify=healthy
+HealthOnFailure=kill
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=360
+
+[Install]
+WantedBy=mail.service

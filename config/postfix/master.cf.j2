@@ -1,0 +1,85 @@
+# Postfix master.cf
+#
+# service type  private unpriv  chroot  wakeup  maxproc command + args
+#
+smtp      inet  n       -       n       -       -       smtpd
+# ── Submission ports (SMTPS:465 + submission:587) ─────────────────────────────
+# Both ports share an identical policy — any difference would just be a
+# foot-gun where one client (e.g. NC's Horde, defaults to 465) bypasses a
+# check that another client (Thunderbird, defaults to 587) hits.  Anything
+# specific to the wire format (TLS-wrappermode vs STARTTLS) is the ONLY
+# legitimate per-port override.
+#
+# Privacy: both routes route to `submission-cleanup` instead of the default
+# `cleanup`, which runs an extra header_checks pass that strips the
+# client-side `Received:` (leaks the user's home IP / reverse DNS) and any
+# X-Originating-IP header that the MUA added.  See
+# submission_header_checks.
+smtps     inet  n       -       n       -       -       smtpd
+  -o smtpd_tls_wrappermode=yes
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_sasl_security_options=noanonymous
+  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_sender_restrictions=reject_sender_login_mismatch
+  -o smtpd_reject_unlisted_sender=yes
+  -o smtpd_end_of_data_restrictions=$outbound_policy
+  -o cleanup_service_name=submission-cleanup
+submission inet  n       -       n       -       -       smtpd
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_sasl_security_options=noanonymous
+  -o smtpd_client_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_sender_restrictions=reject_sender_login_mismatch
+  -o smtpd_reject_unlisted_sender=yes
+  -o smtpd_end_of_data_restrictions=$outbound_policy
+  -o cleanup_service_name=submission-cleanup
+# Dedicated cleanup service for authenticated submissions only.  Inbound
+# MX mail keeps the default `cleanup` (header_checks + mime_header_checks
+# from main.cf), so anti-spam tooling on the inbound path still sees full
+# Received chains; only the locally-authenticated submission path strips
+# them.  Both `header_checks` from main.cf AND the submission-only file
+# are applied here — postfix merges the lists, the submission file just
+# adds the extra IGNOREs on top.
+submission-cleanup unix  n       -       n       -       0       cleanup
+  -o header_checks=pcre:/etc/postfix/stack/header_checks,pcre:/etc/postfix/stack/submission_header_checks
+# Mail dovecot's Sieve sends (vacation replies, redirects) via msmtp
+# (dovecot sendmail_path).  dovecot's own submission_host is TCP-only and
+# cannot authenticate, and unauthenticated loopback 25 may not relay, so
+# both were refused before.  The directory ACL (tmpfiles.d, vmail only) is the
+# gate, the envelope sender must be
+# null or ours, and the fixed Milter identity makes rspamd DKIM-sign it.
+# Inbound spoofs of our domains never reach a mailbox to be redirected:
+# rspamd rejects them (force_actions OWN_DOMAIN_DMARC_REJECT).
+sieve-submit/smtp unix n -     n       -       -       smtpd
+  -o smtpd_helo_restrictions=
+  -o smtpd_sender_restrictions=
+  -o smtpd_recipient_restrictions=
+  -o smtpd_relay_restrictions=check_sender_access,$sieve_sender_access,reject
+  -o smtpd_end_of_data_restrictions=$outbound_policy
+  -o milter_macro_defaults={auth_authen=sieve@{{ primary_domain }}}
+pickup    unix  n       -       n       60      1       pickup
+cleanup   unix  n       -       n       -       0       cleanup
+qmgr      unix  n       -       n       300     1       qmgr
+tlsmgr    unix  -       -       n       1000?   1       tlsmgr
+rewrite   unix  -       -       n       -       -       trivial-rewrite
+bounce    unix  -       -       n       -       0       bounce
+defer     unix  -       -       n       -       0       bounce
+trace     unix  -       -       n       -       0       bounce
+verify    unix  -       -       n       -       1       verify
+flush     unix  n       -       n       1000?   0       flush
+proxymap  unix  -       -       n       -       -       proxymap
+proxywrite unix -       -       n       -       1       proxymap
+smtp      unix  -       -       n       -       -       smtp
+relay     unix  -       -       n       -       -       smtp
+showq     unix  n       -       n       -       -       showq
+error     unix  -       -       n       -       -       error
+retry     unix  -       -       n       -       -       error
+discard   unix  -       -       n       -       -       discard
+# Required by main.cf `maillog_file` (no syslogd in the container); without
+# it master refuses to start: "missing 'postlog' service in master.cf".
+postlog   unix-dgram n  -       n       -       1       postlogd
+local     unix  -       n       n       -       -       local
+virtual   unix  -       n       n       -       -       virtual
+lmtp      unix  -       -       n       -       -       lmtp
+anvil     unix  -       -       n       -       1       anvil
+scache    unix  -       -       n       -       1       scache

@@ -1,0 +1,16 @@
+#!/usr/bin/perl
+# Healthcheck: one policy request that no rule counts (recipient_count=0,
+# not END-OF-MESSAGE), up iff postfwd answers with an action.  The
+# attributes postfix always sends are set, or postfwd logs Perl warnings
+# for every probe.
+use strict;
+use warnings;
+use IO::Socket::UNIX;
+
+my $s = IO::Socket::UNIX->new(Peer => "/run/rootless-ipc/mail/postfwd.sock", Timeout => 3)
+  or die "connect: $!\n";
+print $s join("", map { "$_\n" }
+  "request=smtpd_access_policy", "protocol_state=VRFY", "protocol_name=ESMTP",
+  "client_address=127.0.0.1", "client_name=localhost", "helo_name=healthcheck",
+  "sender=", "recipient=", "recipient_count=0", "");
+(<$s> // "") =~ /^action=/ or die "no answer\n";

@@ -1,0 +1,51 @@
+[Unit]
+Description=mail: rspamd
+PartOf=mail.service
+Before=mail.service
+Wants=mail-redis.service mail-clamd.service
+# Rspamd can initialise while ClamAV loads; postfix waits for ClamAV.
+After=mail-redis.service
+
+[Container]
+Image=ghcr.io/rootless-stack/rspamd:alpine3.24
+ContainerName=mail-rspamd
+# Alpine's rspamd user (100:101) is mail-svc on the host.
+UserNS=keep-id:uid=100,gid=101
+DropCapability=ALL
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+Tmpfs=/run/rspamd:mode=1777,size=4m,noexec
+Tmpfs=/tmp:mode=1777,size=64m,noexec
+Memory=1g
+Network=mail.network
+NetworkAlias=rspamd
+Volume=%h/config/rspamd:/etc/rspamd/local.d:ro,Z
+Volume=%h/data/rspamd:/var/lib/rspamd:Z
+# <domain>.<selector>.key, one per mail domain.
+Volume=%h/secrets/dkim:/etc/rspamd/dkim:ro,Z
+# The milter (postfix) and the controller (dovecot's spam training) are
+# separate sockets with separate ACLs, and no port is published.  Rspamd
+# trusts socket peers: the directory ACL is the gate.
+Volume=/run/rootless-ipc/rspamd-milter:/run/rootless-ipc/rspamd-milter:z
+Volume=/run/rootless-ipc/rspamd-controller:/run/rootless-ipc/rspamd-controller:z
+HealthCmd=["curl", "-fsS", "--unix-socket", "/run/rootless-ipc/rspamd-controller/controller.sock", "http://localhost/stat"]
+HealthStartupCmd=["curl", "-fsS", "--unix-socket", "/run/rootless-ipc/rspamd-controller/controller.sock", "http://localhost/stat"]
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=5s
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=2m
+Notify=healthy
+HealthOnFailure=kill
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=mail.service

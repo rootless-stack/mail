@@ -1,0 +1,19 @@
+# postfwd rules — the daily outbound cap.
+#
+# postfix asks at END-OF-MESSAGE on every listener that sends mail out:
+# submission 587/465 and the sieve-submit socket (master.cf).
+# Inbound mail on port 25 never gets here.
+#
+# One counter for the whole server: `request` is smtpd_access_policy on
+# every query, so rcpt() sums the recipients of all outgoing messages.
+# The 24 h window starts at the first message after the last one ran out.
+# Over the cap postfix answers 450: the sender retries later, nothing
+# bounces.  A small server stays far below 1000 a day, so reaching it
+# usually means a hijacked account.  Adjust the number to your volume.
+#
+# A SIGHUP reloads the rules; --keep_rates keeps the
+# count across that and --save_rates across restarts.  Editing this rule
+# starts a fresh count (postfwd keys the counter by the rule), which is
+# also how to lift a reached cap early.
+id=OUTBOUND_DAILY ; protocol_state==END-OF-MESSAGE
+   action=rcpt(request/1000/86400/450 4.7.1 Daily outbound mail limit reached, try again later)

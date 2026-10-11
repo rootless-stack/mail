@@ -1,0 +1,5 @@
+# The supporting services (redis, clamd, rspamd) with internet access:
+# signature updates and RBL lookups.  Postfix, Dovecot and tlspol run in
+# the host network instead (README), and reach these over Unix sockets.
+[Network]
+NetworkName=mail

@@ -1,0 +1,34 @@
+# rspamd local.d/dkim_signing.conf — DKIM signing
+# One entry per mail domain.
+
+enabled = true;
+use_domain = "header";
+use_esld = true;
+sign_authenticated = true;
+sign_local = true;
+
+# Postfix's ACL-gated sieve-submit listener supplies its fixed sieve@
+# identity through the Milter {auth_authen} macro, so vacation replies and
+# redirects are signed like submissions.
+# Keep sign_inbound at its false default: public port-25 mail must never become
+# eligible for our signatures merely because its From domain claims to be ours.
+
+# Allow the SASL identity's domain to differ from the From header's domain.
+# Default is false, which silently skips signing whenever an authenticated
+# user submits as one of their alias addresses (e.g. SASL = jane@example.org
+# sending From: jane@example.net) and produces dkim=none at the receiver.
+# The check is redundant here: normal submission is gated by Postfix's
+# smtpd_sender_login_maps plus reject_sender_login_mismatch; the only synthetic
+# authenticated identity is the dedicated sieve-submit listener, whose socket
+# ACL and exact envelope-sender restriction provide the equivalent gate.
+allow_username_mismatch = true;
+
+# Selector and key per domain
+{% for domain in mail_domains %}
+domain {
+  "{{ domain }}" {
+    selector = "{{ dkim_selector }}";
+    path     = "/etc/rspamd/dkim/{{ domain }}.{{ dkim_selector }}.key";
+  }
+}
+{% endfor %}

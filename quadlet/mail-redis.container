@@ -1,0 +1,55 @@
+# Rspamd's cache: bayes, neural, history, greylist.
+#
+# Mail units depend on each other with Wants= + After=, never Requires=:
+# an explicit restart of a backend must not propagate into postfix or
+# dovecot.
+[Unit]
+Description=mail: redis (rspamd cache)
+PartOf=mail.service
+Before=mail.service
+
+[Container]
+Image=docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+ContainerName=mail-redis
+# keep-id maps mail-svc to 999; starting as 999 skips the entrypoint's
+# privilege drop.
+UserNS=keep-id:uid=999,gid=1000
+User=999
+Group=1000
+DropCapability=ALL
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+Memory=512m
+Network=mail.network
+NetworkAlias=redis
+Volume=%h/data/redis:/data:Z
+# requirepass lives in the mounted redis.conf, never in argv or the
+# environment.
+Volume=%h/config/redis/redis.conf:/run/secrets/redis.conf:ro,Z
+Volume=%h/secrets/redis_password:/run/secrets/redis_password:ro,Z
+Exec=redis-server /run/secrets/redis.conf --save 900 1 --save 300 10
+# Not JSON, so /bin/sh -c; `$$` is systemd's literal `$`.
+HealthCmd=REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli ping
+HealthStartupCmd=REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli ping
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=5s
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+# A cold start reloads a large RDB.
+HealthStartPeriod=10m
+Notify=healthy
+HealthOnFailure=kill
+# SIGTERM makes redis write a final snapshot; don't cut it short.
+StopTimeout=60
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=660
+
+[Install]
+WantedBy=mail.service

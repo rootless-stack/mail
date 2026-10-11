@@ -1,0 +1,66 @@
+[Unit]
+Description=mail: postfix
+PartOf=mail.service
+Before=mail.service
+Wants=mail-dovecot.service mail-rspamd.service mail-tlspol.service mail-postfwd.service mail-clamd.service
+After=mail-dovecot.service mail-rspamd.service mail-tlspol.service mail-postfwd.service mail-clamd.service
+
+[Container]
+Image=ghcr.io/rootless-stack/postfix:alpine3.24
+ContainerName=mail-postfix
+# Starts as root (= mail-svc).  Queue chown/chmod (CHOWN, FOWNER), `postfix
+# check` walks 0700 queue dirs as root (DAC_OVERRIDE), the master changes
+# and signals worker identities (SETUID, SETGID, KILL).  No chroot.
+DropCapability=ALL
+AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETUID SETGID
+NoNewPrivileges=true
+SeccompProfile=/etc/containers/seccomp/rootless-stack.json
+ReadOnly=true
+# Staged TLS copies and data_directory (master.lock, TLS session caches).
+Tmpfs=/tmp:mode=1777,size=16m,noexec
+Tmpfs=/var/lib/postfix:mode=0700,size=64m,noexec
+Memory=512m
+# Host network: smtpd sees real client addresses on 25/465/587, so
+# mynetworks can be 127.0.0.1/32 without an open relay.
+Network=host
+# The config at a subdirectory, never over /etc/postfix itself, which holds
+# the package's postfix-files and dynamicmaps.cf.  MAIL_CONFIG makes it the
+# config_directory for every postfix command, healthcheck included.
+Volume=%h/config/postfix:/etc/postfix/stack:ro,z
+Environment=MAIL_CONFIG=/etc/postfix/stack
+# DANE needs a validating resolver (README).
+Volume=%h/config/postfix/resolv.conf:/etc/resolv.conf:ro,z
+Volume=%h/data/queue:/var/spool/postfix:Z
+Volume=%h/certs:/etc/ssl/mail:ro,z
+# LMTP and SASL (dovecot), tlspol and postfwd sockets; rspamd's milter.
+Volume=/run/rootless-ipc/mail:/run/rootless-ipc/mail:z
+Volume=/run/rootless-ipc/rspamd-milter:/run/rootless-ipc/rspamd-milter:z
+# master.cf `sieve-submit/smtp`: Sieve's vacation and redirect listener.
+Volume=/run/rootless-ipc/sieve-submit:/var/spool/postfix/public/sieve-submit:z
+# lldap's LDAP socket.  No relabel option: the directory belongs to
+# ldap-svc, and the ldap stack labels it.
+Volume=/run/rootless-ipc/lldap/ldap:/run/rootless-ipc/lldap/ldap:ro
+HealthCmd=["postfix", "status"]
+HealthStartupCmd=["postfix", "status"]
+HealthStartupInterval=3s
+HealthStartupSuccess=1
+HealthStartupRetries=0
+HealthStartupTimeout=5s
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=1m
+Notify=healthy
+HealthOnFailure=kill
+StopTimeout=30
+
+[Service]
+# Wants + After orders a normal start but does not reject a failed
+# dependency: refuse SMTP until the scanner really answers.
+ExecStartPre=/usr/bin/timeout 10 /usr/bin/podman exec mail-clamd clamdscan --ping 1
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=mail.service

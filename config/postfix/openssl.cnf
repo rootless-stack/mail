@@ -1,0 +1,14 @@
+# Postfix's OpenSSL baseline (main.cf tls_config_file / tls_config_name).
+# Drops SHA-1 (and SHA-224) from the TLS 1.2 signature algorithms: OpenSSL's
+# default still offers rsa_pkcs1_sha1 (internet.nl "hash function for key
+# exchange": insufficient, RFC 9155).  Applies to smtpd and smtp alike.
+postfix = postfix_settings
+
+[postfix_settings]
+ssl_conf = postfix_ssl_settings
+
+[postfix_ssl_settings]
+system_default = baseline_postfix_settings
+
+[baseline_postfix_settings]
+SignatureAlgorithms = ed25519:ed448:ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:rsa_pss_rsae_sha256:rsa_pss_rsae_sha384:rsa_pss_rsae_sha512:rsa_pss_pss_sha256:rsa_pss_pss_sha384:rsa_pss_pss_sha512:RSA+SHA256:RSA+SHA384:RSA+SHA512

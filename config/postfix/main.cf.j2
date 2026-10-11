@@ -1,0 +1,200 @@
+# Postfix main.cf, rendered by render.py
+# Target: Alpine container, rootless podman, LDAP-backed virtual domains
+
+# ── Identity ───────────────────────────────────────────────────────────────────
+# Keep the compatibility level explicit when the image is upgraded.  The
+# outbound SMTP TLS policy is already pinned to `dane` below; no per-setting
+# compatibility warnings appeared in the active host's recent mail logs.
+# Review COMPATIBILITY_README before raising this again.
+compatibility_level = 3.11
+myhostname = {{ mail_hostname }}
+mydomain = {{ primary_domain }}
+myorigin = $mydomain
+# No syslogd in the container: without this every smtpd/qmgr line was
+# silently dropped (only postlog startup notes reached the journal), which
+# also left crowdsec's postfix scenarios blind.
+maillog_file = /dev/stdout
+inet_interfaces = all
+inet_protocols = all
+
+# ── Local delivery disabled (all mail is virtual) ─────────────────────────────
+mydestination =
+local_recipient_maps =
+local_transport = error:local mail delivery is disabled
+
+# ── Virtual domains ────────────────────────────────────────────────────────────
+# Each map is consulted in order; postfix uses the first non-empty result.
+virtual_mailbox_domains = ldap:/etc/postfix/stack/ldap-domains.cf
+virtual_mailbox_maps    = ldap:/etc/postfix/stack/ldap-mailboxes.cf
+# LDAP map first: a real mailbox (`mail=`) maps to itself, which ends the
+# expansion, and per-user `mailAlias` entries resolve to their owner.  Only
+# then regexp_aliases applies (role addresses, mirror domains), so it can
+# never rewrite a real mailbox.
+virtual_alias_maps      = ldap:/etc/postfix/stack/ldap-aliases.cf, regexp:/etc/postfix/stack/regexp_aliases
+# LMTP delivery to dovecot over its Unix socket.
+virtual_transport       = lmtp:unix:/run/rootless-ipc/mail/lmtp.sock
+
+# ── SASL (Dovecot auth) ────────────────────────────────────────────────────────
+smtpd_sasl_type           = dovecot
+# auth-client over UDS, same socket dir as LMTP.  Absolute path is
+# allowed because postfix smtpd is not chrooted (master.cf column 4 = n).
+smtpd_sasl_path           = /run/rootless-ipc/mail/auth-client.sock
+# AUTH is offered ONLY on submission (587) and smtps (465) — master.cf
+# turns it on per-service with `-o smtpd_sasl_auth_enable=yes`, together
+# with `reject_sender_login_mismatch` and the submission header_checks.
+# Port 25 is inbound MX traffic and must never accept credentials: with
+# the previous global `yes`, any account could relay through 25 with an
+# arbitrary envelope sender (no login-mismatch check on that service)
+# and bypass the submission-only header scrubbing.  Also shrinks the
+# credential brute-force surface to the two ports meant for clients.
+smtpd_sasl_auth_enable    = no
+smtpd_sasl_security_options = noanonymous, noplaintext
+smtpd_sasl_tls_security_options = noanonymous
+# Which SASL login may send as which address: a user's `mail` and every
+# `mailAlias` (ldap-sender.cf).
+smtpd_sender_login_maps   = ldap:/etc/postfix/stack/ldap-sender.cf
+
+# ── TLS inbound (smtpd) ────────────────────────────────────────────────────────
+# A copy staged by the entrypoint from ~/certs (stage-certs): smtpd's
+# workers drop to the postfix user, which cannot read the mount itself.
+smtpd_tls_cert_file  = /tmp/postfix-cert/fullchain.pem
+smtpd_tls_key_file   = /tmp/postfix-cert/privkey.pem
+smtpd_tls_security_level     = may
+smtpd_tls_auth_only          = yes
+smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtpd_tls_protocols           = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+# Mozilla intermediate (TLSRef v6.0): only the six ECDHE AEAD suites, all
+# NCSC "sufficient", so the order is moot (client preference, no preempt)
+# and there is no DHE to parametrise.  Same list as dovecot's ssl_cipher_list.
+# medium, not high: tls_medium_cipherlist is overridden here, while the
+# outbound client keeps OpenSSL's broader HIGH (a peer without ECDHE-AEAD
+# would otherwise get plaintext).
+smtpd_tls_mandatory_ciphers   = medium
+smtpd_tls_ciphers             = medium
+tls_medium_cipherlist         = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
+tls_eecdh_auto_curves         = X25519MLKEM768 X25519 prime256v1 secp384r1
+# Empty: the default offers ffdhe2048 to TLS 1.3 peers (NCSC: insufficient).
+tls_ffdhe_auto_groups         =
+# No SHA-1 in the TLS 1.2 signature algorithms (see the file); the cipher
+# list alone does not cover the handshake signature.
+tls_config_file               = /etc/postfix/stack/openssl.cnf
+tls_config_name               = postfix
+# Keep a shared cache for clients that do not use stateless TLS session
+# tickets. The deployed Postfix supports LMDB but cannot open the old btree
+# cache (Postfix TLS_README / NON_BERKELEYDB_README).
+smtpd_tls_session_cache_database = lmdb:${data_directory}/smtpd_scache
+smtpd_tls_loglevel            = 1
+
+# ── TLS outbound (smtp) ────────────────────────────────────────────────────────
+smtp_tls_cert_file    = $smtpd_tls_cert_file
+smtp_tls_key_file     = $smtpd_tls_key_file
+# The system bundle: `secure` (MTA-STS: Gmail, Outlook) verifies the peer
+# against this file alone, so it must hold the public roots, not our own chain.
+smtp_tls_CAfile       = /etc/ssl/certs/ca-certificates.crt
+# dane: validates TLSA records when present; falls back to opportunistic TLS if none.
+# Combined with dnssec below this enforces DANE for destinations that publish TLSA.
+smtp_tls_security_level   = dane
+smtp_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtp_tls_protocols           = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+smtp_tls_mandatory_ciphers   = high
+smtp_tls_ciphers             = high
+# The SMTP client still uses a shared cache; Alpine's Postfix supports LMDB.
+smtp_tls_session_cache_database = lmdb:${data_directory}/smtp_scache
+smtp_tls_loglevel         = 1
+smtp_dns_support_level    = dnssec
+# Per-destination policy from the mail-tlspol sidecar (postfix-tlspol):
+# `dane-only` where TLSA is DNSSEC-proven, else `secure match=<policy mx>`
+# for an MTA-STS enforce policy (Gmail, Outlook), else NOTFOUND, which
+# leaves the global `dane` level above in charge.  DANE wins over MTA-STS
+# for a domain with both.  A DNS error answers TEMP, and the sidecar DOWN
+# is a table lookup error: either way postfix DEFERS outbound mail
+# (queued, retried) — never sends it with weaker checks.
+smtp_tls_policy_maps      = socketmap:unix:/run/rootless-ipc/mail/tlspol.sock:QUERY
+
+# ── Milter (RSPAMD) ────────────────────────────────────────────────────────────
+# Rspamd's milter, a Unix socket under /run/rootless-ipc/rspamd-milter/.
+milter_protocol  = 6
+# `tempfail` = fail CLOSED: while rspamd is unreachable, every message gets
+# a 4xx — inbound senders and our users' clients retry, local mail waits in
+# the queue.  `accept` would deliver unscanned mail and send outbound mail without a
+# DKIM signature, which receivers with a DMARC `reject` policy for our
+# domains drop without a bounce.  A delay beats a silent loss.
+milter_default_action = tempfail
+smtpd_milters    = unix:/run/rootless-ipc/rspamd-milter/milter.sock
+non_smtpd_milters = unix:/run/rootless-ipc/rspamd-milter/milter.sock
+# Bounces and delay warnings skip every milter by default, so they left
+# unsigned as From: MAILER-DAEMON@$myorigin with a null envelope sender:
+# SPF then checks the HELO name ($myhostname), which strict alignment
+# never matches, and our own `p=reject` dropped every external bounce.
+# Through the milter they arrive as localhost and rspamd's `sign_local`
+# signs them for $myorigin.
+internal_mail_filter_classes = bounce
+
+# Envelope senders the `sieve-submit` listener (master.cf) relays: null
+# (vacation, redirected bounces) or one of our domains (redirect uses the
+# original recipient, dovecot sieve_redirect_envelope_from).
+sieve_sender_access = inline:{ <>=OK{% for domain in mail_domains %}, {{ domain }}=OK{% endfor %} }
+
+# ── mynetworks / Restrictions ─────────────────────────────────────────────────
+# Postfix runs in the host network, so smtpd sees every client's real
+# address, and host-local processes arrive on 127.0.0.1.  Not 127.0.0.0/8:
+# rootless Podman's pasta translates other users' containers' connections
+# to host listeners into that range too, which would give every rootless
+# stack relay rights.
+mynetworks = 127.0.0.1/32 [::1]/128
+mynetworks_style = host
+
+smtpd_helo_required = yes
+smtpd_helo_restrictions =
+    permit_sasl_authenticated,
+    reject_invalid_helo_hostname,
+    reject_non_fqdn_helo_hostname
+
+smtpd_sender_restrictions =
+    permit_sasl_authenticated,
+    reject_non_fqdn_sender,
+    reject_unknown_sender_domain
+
+# No `reject_unverified_recipient`: it issues an
+# SMTP-probe RCPT TO the recipient's MX on every previously-uncached
+# submission, hanging Thunderbird sends for minutes against MTAs that drop
+# probe handshakes (almost all modern receivers).  Local recipients are
+# already filtered by the implicit `reject_unlisted_recipient` against
+# `virtual_mailbox_maps` + `virtual_alias_maps`; external recipient
+# validation is the receiving MTA's job, not ours.
+smtpd_recipient_restrictions =
+    permit_sasl_authenticated,
+    reject_unauth_destination
+
+smtpd_relay_restrictions =
+    permit_sasl_authenticated,
+    reject_unauth_destination
+
+# ── Miscellaneous ──────────────────────────────────────────────────────────────
+message_size_limit   = 52428800
+mailbox_size_limit   = 0
+recipient_delimiter  = +
+disable_vrfy_command = yes
+smtpd_banner         = $myhostname ESMTP
+
+# Header/body cleanup
+header_checks   = pcre:/etc/postfix/stack/header_checks
+mime_header_checks = pcre:/etc/postfix/stack/mime_header_checks
+
+# Queue
+maximal_queue_lifetime    = 5d
+bounce_queue_lifetime     = 1d
+default_process_limit     = 100
+smtpd_client_connection_count_limit = 50
+smtpd_client_connection_rate_limit  = 60
+# TLS audit services open one connection per cipher probed (cryptcheck.fr:
+# 140+/min), so the rate limit alone refuses the scan.  Names match only
+# after postfix's own rDNS+forward check (else "unknown").
+# internet.nl's single test connects as the bare apex, and this list is not
+# in parent_domain_matches_subdomains: ".internet.nl" alone would miss it.
+smtpd_client_event_limit_exceptions = $mynetworks .imirhil.fr internet.nl .internet.nl
+
+# Daily outbound cap (postfwd/postfwd.cf), asked at END-OF-MESSAGE by
+# every listener that sends mail out (master.cf: smtps, submission,
+# sieve-submit).  Fails open: a postfwd outage must not stop all mail.
+outbound_policy = check_policy_service { unix:/run/rootless-ipc/mail/postfwd.sock, default_action=DUNNO }

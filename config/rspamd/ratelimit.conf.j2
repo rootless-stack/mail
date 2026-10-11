@@ -1,0 +1,14 @@
+    # The sieve-submit listener (postfix master.cf) hands rspamd one fixed
+    # {auth_authen} shared by every user's vacation replies and redirects;
+    # the per-user bucket would throttle them all together.  postfwd's
+    # daily cap still bounds it.
+    whitelisted_user = ["sieve@{{ primary_domain }}"];
+    rates {
+        # outgoing mail for authenticated users
+        user = {
+            bucket = {
+                burst = 10;
+                rate = "5 / 1min";
+            }
+        }
+    }

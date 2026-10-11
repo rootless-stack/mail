@@ -1,0 +1,18 @@
+---
+# postfix-tlspol: answers postfix's smtp_tls_policy_maps socketmap
+# (postfix/main.cf) — DANE first, MTA-STS only
+# where TLSA is proven absent, TEMP (postfix defers) on DNS errors.
+server:
+  # Same socket directory as LMTP/SASL: its ACL admits postfix, so the file itself is 0666 like dovecot's.
+  address: unix:/run/rootless-ipc/mail/tlspol.sock
+  socket-permissions: 438  # = 0o666; yamllint forbids octal literals
+  log-level: info
+  log-format: text
+  prefetch: true
+  # tmpfs (mail-tlspol.container): refilled by the first lookups after a
+  # restart, nothing to back up or replicate.
+  cache-file: /var/lib/postfix-tlspol/cache.db
+
+# `address` unset: the first nameserver of the mounted resolv.conf —
+# postfix's own (unbound primary), so both see the same DNSSEC answers.
+dns: {}

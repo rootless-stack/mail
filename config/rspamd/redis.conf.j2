@@ -1,0 +1,12 @@
+# rspamd local.d/redis.conf — Redis connection for all modules
+# Rendered by render.py: edit the template, not the copy.
+#
+# We template the password directly into the deployed config rather than
+# letting rspamd expand a `${REDIS_PASSWORD}` env var.  rspamd's UCL parser
+# only pre-registers a fixed set of variables (WWWDIR, LOGDIR, etc.) for
+# `${…}` substitution; it does NOT automatically pull arbitrary env vars
+# into that map, so `password = "${REDIS_PASSWORD}";` reaches Redis as the
+# literal string "${REDIS_PASSWORD}" → NOAUTH.  Templating sidesteps that.
+
+servers  = "redis:6379";
+password = "{{ secret.redis_password }}";

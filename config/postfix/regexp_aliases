@@ -1,0 +1,12 @@
+# Virtual alias rewrites that need no per-user LDAP attribute.  Postfix
+# tries virtual_alias_maps in order and stops at the first hit: the LDAP
+# map (real mailboxes and `mailAlias`) first, this file second, so a real
+# mailbox is never rewritten here.
+#
+# PCRE; postfix lowercases the key before matching.
+
+# RFC 2142 role addresses to a real mailbox:
+# /^(postmaster|abuse|hostmaster|webmaster|security)@example\.org$/  admin@example.org
+
+# A whole mirror domain:
+# /^(.+)@example\.net$/  $1@example.org

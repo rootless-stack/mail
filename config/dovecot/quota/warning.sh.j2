@@ -1,0 +1,21 @@
+#!/bin/sh
+# Dovecot quota warning (90-plugin.conf, `warning warn-90`): mails
+# postmaster once an account's usage crosses the threshold.  Runs as vmail
+# via the quota-warning service; args: <percent> <user>.  Sent like Sieve
+# mail, through postfix's sieve-submit listener (DKIM-signed there).
+set -eu
+PERCENT=$1
+ACCOUNT=$2
+TO=postmaster@{{ primary_domain }}
+/usr/bin/msmtp --host=localhost --socket=/run/rootless-ipc/sieve-submit/smtp \
+  -f "$TO" -- "$TO" <<MAIL
+From: Mail server <$TO>
+To: $TO
+Subject: Mailbox $ACCOUNT is $PERCENT% full
+Auto-Submitted: auto-generated
+
+The mailbox $ACCOUNT has reached $PERCENT% of its storage quota.
+
+Raise its limit (mailQuotaBytes in lldap, in bytes; unset = 1 GiB) or ask
+the user to delete or archive mail.  At 100% new mail is rejected.
+MAIL
