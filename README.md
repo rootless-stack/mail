@@ -1,6 +1,6 @@
 # rootless-stack / mail
 
-**Needs:** [base](https://github.com/rootless-stack/base), [ldap](https://github.com/rootless-stack/ldap), running.
+**Needs:** [base](https://github.com/rootless-stack/base), [ldap](https://github.com/rootless-stack/ldap), [dns](https://github.com/rootless-stack/dns) (or another DNSSEC-validating resolver), running.
 
 A complete mail server: Postfix (SMTP), Dovecot (IMAP, LMTP, Sieve), Rspamd
 (spam filtering, DKIM, DMARC checks), ClamAV, and DANE/MTA-STS for outbound
@@ -29,9 +29,9 @@ Ports: 25 (SMTP), 465 and 587 (submission), 993 (IMAPS), 4190
 ## Requirements
 
 - A certificate for `mail_hostname`, from an ACME client of your choice.
-- A **DNSSEC-validating resolver** on the host (unbound, for example).
-  Without one, Postfix's DANE checks silently fall back to opportunistic
-  TLS.
+- A **DNSSEC-validating resolver** on the host: [dns](https://github.com/rootless-stack/dns),
+  or your own in `dns_resolvers`.  Without one, Postfix's DANE checks
+  silently fall back to opportunistic TLS.
 - Python 3.11+ with Jinja2 for rendering the config (`python3-jinja2`).
 - DNS: MX, SPF, DKIM (below) and DMARC records for each domain.
 

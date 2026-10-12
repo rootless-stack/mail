@@ -17,5 +17,6 @@ ldap_base_dn = "dc=example,dc=org"
 ldap_readonly_dn = "uid=readonly,ou=people,dc=example,dc=org"
 lldap_ldap_uri = "ldapi://%2Frun%2Frootless-ipc%2Flldap%2Fldap%2Fldap.sock"
 
-# A DNSSEC-validating resolver on the host.  DANE stays off without one.
-dns_resolvers = ["127.0.0.1"]
+# DNSSEC-validating resolvers on the host (the dns stack's two instances).
+# DANE stays off without one.
+dns_resolvers = ["127.0.0.10", "127.0.0.20"]
