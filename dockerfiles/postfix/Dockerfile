@@ -6,9 +6,6 @@ RUN apk add --no-cache \
     postfix-pcre \
     postfix-pgsql \
     ca-certificates \
-    cyrus-sasl \
-    cyrus-sasl-digestmd5 \
-    libsasl \
     tzdata && \
     # Create postfix spool directories
     { postfix set-permissions || true; }

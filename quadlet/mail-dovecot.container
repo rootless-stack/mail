@@ -12,10 +12,12 @@ ContainerName=mail-dovecot
 # against ~/.config/containers/policy.json, and rolls back if it fails.
 AutoUpdate=registry
 # Starts as root (= mail-svc) and drops privileges per process.  The master
-# chowns sockets (CHOWN, FOWNER), changes and signals worker identities
-# (SETUID, SETGID, KILL), and login processes chroot (SYS_CHROOT).
+# chowns sockets (CHOWN), changes and signals worker identities
+# (SETUID, SETGID, KILL), login processes chroot (SYS_CHROOT), and doveadm
+# run as root looks users up on vmail's auth-userdb socket (DAC_OVERRIDE).
+# lmtp and indexer-worker, which parse mail, run as vmail with none of them.
 DropCapability=ALL
-AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETUID SETGID SYS_CHROOT
+AddCapability=CHOWN DAC_OVERRIDE KILL SETUID SETGID SYS_CHROOT
 NoNewPrivileges=true
 SeccompProfile=/etc/containers/seccomp/rootless-stack.json
 ReadOnly=true
