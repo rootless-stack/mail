@@ -8,6 +8,9 @@ After=mail-dovecot.service mail-rspamd.service mail-tlspol.service mail-postfwd.
 [Container]
 Image=ghcr.io/rootless-stack/postfix:alpine3.24
 ContainerName=mail-postfix
+# Signed by rootless-stack; `podman auto-update` pulls a newer one, checked
+# against ~/.config/containers/policy.json, and rolls back if it fails.
+AutoUpdate=registry
 # Starts as root (= mail-svc).  Queue chown/chmod (CHOWN, FOWNER), `postfix
 # check` walks 0700 queue dirs as root (DAC_OVERRIDE), the master changes
 # and signals worker identities (SETUID, SETGID, KILL).  No chroot.

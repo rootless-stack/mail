@@ -8,6 +8,9 @@ After=mail-rspamd.service
 [Container]
 Image=ghcr.io/rootless-stack/dovecot:alpine3.24
 ContainerName=mail-dovecot
+# Signed by rootless-stack; `podman auto-update` pulls a newer one, checked
+# against ~/.config/containers/policy.json, and rolls back if it fails.
+AutoUpdate=registry
 # Starts as root (= mail-svc) and drops privileges per process.  The master
 # chowns sockets (CHOWN, FOWNER), changes and signals worker identities
 # (SETUID, SETGID, KILL), and login processes chroot (SYS_CHROOT).

@@ -6,6 +6,9 @@ Before=mail.service
 [Container]
 Image=ghcr.io/rootless-stack/clamd:alpine3.24
 ContainerName=mail-clamd
+# Signed by rootless-stack; `podman auto-update` pulls a newer one, checked
+# against ~/.config/containers/policy.json, and rolls back if it fails.
+AutoUpdate=registry
 # Alpine's clamav user (100:101) is mail-svc on the host.
 UserNS=keep-id:uid=100,gid=101
 DropCapability=ALL

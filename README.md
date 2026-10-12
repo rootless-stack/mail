@@ -57,6 +57,11 @@ sysctl --system
 sudo -u mail-svc -H -s
 ```
 
+The sysctl lets every user bind ports 25-1023.  To reserve the mail
+ports to `mail-svc` and the rest to system services, add the optional
+[port reservation](https://github.com/rootless-stack/base#optional-port-reservation)
+with the line `mail-svc tcp:25 tcp:465 tcp:587 tcp:993`.
+
 **As `mail-svc`:**
 
 ```sh
@@ -87,6 +92,11 @@ podman unshare chown 5000:5000 data/vmail
 
 cp $R/mail/quadlet/* .config/containers/systemd/
 cp $R/mail/systemd/* .config/systemd/user/
+
+# Pull only signed images (base: "Signed images and automatic updates").
+mkdir -p .config/containers/registries.d
+cp $R/base/containers/policy.json .config/containers/
+cp $R/base/containers/registries.d/* .config/containers/registries.d/
 ```
 
 **As root** again, for the socket directories:
@@ -103,6 +113,9 @@ systemctl --user daemon-reload
 systemctl --user enable --now mail.service mail-certs.path
 systemctl --user status 'mail*'
 ```
+
+Optionally, keep the images current:
+`systemctl --user enable --now podman-auto-update.timer`.
 
 ClamAV downloads its signatures on the first start, which takes a few
 minutes; postfix waits for it.
