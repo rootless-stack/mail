@@ -1,0 +1,31 @@
+# The units through the Quadlet generator of the oldest podman the stacks
+# support (base README): an unknown key or a bad value fails here, not at
+# an operator's daemon-reload.
+name: check
+
+on:
+  push:
+    branches: [main]
+    paths: [quadlet/**, .github/workflows/check.yml]
+  pull_request:
+    paths: [quadlet/**, .github/workflows/check.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Raise together with the podman version in base's README.
+  PODMAN: quay.io/podman/stable:v5.5@sha256:25d49cf990843962043942db172c7ef5c6f85012384aada7976aec65906ae209
+
+jobs:
+  units:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generate the units
+        run: |
+          podman run --rm -v "$PWD/quadlet:/units:ro" -e QUADLET_UNIT_DIRS=/units \
+            "$PODMAN" /usr/libexec/podman/quadlet -dryrun -user >/dev/null

@@ -1,11 +1,13 @@
 name: images
 
 on:
+  # The config and its checks too: they run against freshly built images,
+  # and an unchanged image is promoted as a no-op.
   push:
     branches: [main]
-    paths: [dockerfiles/**, .github/workflows/images.yml]
+    paths: [dockerfiles/**, config/**, tests/**, vars.example.toml, .github/workflows/images.yml]
   pull_request:
-    paths: [dockerfiles/**, .github/workflows/images.yml]
+    paths: [dockerfiles/**, config/**, tests/**, vars.example.toml, .github/workflows/images.yml]
   # Nightly cold rebuild: picks up Alpine package security fixes.  Promote
   # publishes only images whose content changed.
   schedule:
@@ -41,6 +43,8 @@ jobs:
       context: ${{ matrix.context }}
       file: ${{ matrix.file || '' }}
       no-cache: ${{ github.event_name == 'schedule' || inputs.no-cache == true }}
+      # Each architecture's image, before it is pushed (tests/).
+      validate: tests/validate.sh
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -48,11 +52,12 @@ jobs:
       contents: read
       packages: write
 
-  # The stack's validators of the candidates belong between build and
-  # promote: promote publishes only what passed them.
+  # An image whose build or checks failed has no candidate, and its promote
+  # leaves the published tag alone; the others go ahead, so one broken
+  # image never holds back another's update.
   promote:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     strategy:
       fail-fast: false
       matrix: *images
