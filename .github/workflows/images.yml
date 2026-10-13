@@ -12,6 +12,10 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
+      no-cache:
+        description: Rebuild cold, like the nightly run (an urgent package fix)
+        type: boolean
+        default: false
       resign:
         description: Promote and sign every image even if unchanged (key rotation)
         type: boolean
@@ -36,7 +40,7 @@ jobs:
       image: ${{ matrix.image }}
       context: ${{ matrix.context }}
       file: ${{ matrix.file || '' }}
-      no-cache: ${{ github.event_name == 'schedule' }}
+      no-cache: ${{ github.event_name == 'schedule' || inputs.no-cache == true }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
