@@ -1,11 +1,6 @@
 #!/bin/sh
 set -e
 
-# ── Stage TLS material into the container ─────────────────────────────────
-# See /usr/local/bin/stage-certs (also run by the host-side cert-reload.sh
-# after every renewal, so the copy postfix reads never goes stale).
-/usr/local/bin/stage-certs postfix
-
 # /var/spool/postfix is a host bind-mount.  In rootless podman, files
 # created by in-container postfix-user (UID 100) and in-container root
 # (UID 0) map to *different* host UIDs (a subuid vs. mail-svc), so

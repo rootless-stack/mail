@@ -1,10 +1,10 @@
 [Unit]
 Description=mail: load a renewed certificate into postfix and dovecot
 
-# Postfix and dovecot read a copy staged at container start; re-stage it,
-# then reload.  A container that is not running picks the new certificate
-# up at its next start.
+# Both read ~/certs through their mount; a graceful reload makes them load
+# the new files, without dropping a connection.  A container that is not
+# running reads them at its next start.
 [Service]
 Type=oneshot
-ExecStart=-/usr/bin/podman exec mail-postfix sh -c 'stage-certs postfix && postfix reload'
-ExecStart=-/usr/bin/podman exec mail-dovecot sh -c 'stage-certs dovecot && doveadm reload'
+ExecStart=-/usr/bin/podman exec mail-postfix postfix reload
+ExecStart=-/usr/bin/podman exec mail-dovecot doveadm reload

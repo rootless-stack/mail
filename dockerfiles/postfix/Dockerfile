@@ -12,7 +12,6 @@ RUN apk add --no-cache \
 
 EXPOSE 25 465 587
 
-COPY --chmod=0755 postfix/entrypoint.sh /entrypoint.sh
-COPY --chmod=0755 shared/stage-certs.sh /usr/local/bin/stage-certs
+COPY --chmod=0755 entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -21,7 +21,4 @@ RUN apk add --no-cache \
 
 EXPOSE 993 4190
 
-COPY --chmod=0755 dovecot/entrypoint.sh /entrypoint.sh
-COPY --chmod=0755 shared/stage-certs.sh /usr/local/bin/stage-certs
-
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["dovecot", "-F"]

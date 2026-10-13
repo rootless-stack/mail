@@ -32,8 +32,8 @@ jobs:
       fail-fast: false
       matrix: &images
         include:
-          - {image: postfix, context: dockerfiles, file: dockerfiles/postfix/Dockerfile}
-          - {image: dovecot, context: dockerfiles, file: dockerfiles/dovecot/Dockerfile}
+          - {image: postfix, context: dockerfiles/postfix}
+          - {image: dovecot, context: dockerfiles/dovecot}
           - {image: rspamd, context: dockerfiles/rspamd}
           - {image: postfwd, context: dockerfiles/postfwd}
           - {image: clamd, context: dockerfiles/clamd}

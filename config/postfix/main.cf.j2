@@ -55,10 +55,11 @@ smtpd_sasl_tls_security_options = noanonymous
 smtpd_sender_login_maps   = ldap:/etc/postfix/stack/ldap-sender.cf
 
 # ── TLS inbound (smtpd) ────────────────────────────────────────────────────────
-# A copy staged by the entrypoint from ~/certs (stage-certs): smtpd's
-# workers drop to the postfix user, which cannot read the mount itself.
-smtpd_tls_cert_file  = /tmp/postfix-cert/fullchain.pem
-smtpd_tls_key_file   = /tmp/postfix-cert/privkey.pem
+# ~/certs, mounted read-only.  smtpd loads the key as root before it drops
+# privileges, so privkey.pem stays readable by mail-svc (container root)
+# alone; every reload, and every new smtpd, reads the current files.
+smtpd_tls_cert_file  = /etc/ssl/mail/fullchain.pem
+smtpd_tls_key_file   = /etc/ssl/mail/privkey.pem
 smtpd_tls_security_level     = may
 smtpd_tls_auth_only          = yes
 smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
