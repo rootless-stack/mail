@@ -126,6 +126,17 @@ minutes; postfix waits for it.
 When `fullchain.pem` changes, `mail-certs.path` reloads Postfix and Dovecot.
 Copy `privkey.pem` first, then `fullchain.pem`.
 
+To read a certbot tree in place instead, mount it whole (its `live/`
+files are symlinks into `archive/`) and name the directory, in a drop-in
+for both `mail-postfix.container` and `mail-dovecot.container`, plus a
+`PathChanged=` drop-in for `mail-certs.path`:
+
+```ini
+[Container]
+Volume=/etc/letsencrypt:/etc/letsencrypt:ro
+Environment=MAIL_CERT_DIR=/etc/letsencrypt/live/mail.example.org
+```
+
 With DANE (TLSA records for your MX), a renewal that changes the key must
 publish the new TLSA record and wait two TTLs before the new certificate
 reaches `~/certs`, or remote servers defer mail to you meanwhile.

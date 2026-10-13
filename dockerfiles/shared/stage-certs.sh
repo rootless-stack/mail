@@ -6,10 +6,14 @@
 # root = the host user) can read it; the workers postfix and dovecot drop
 # to cannot.  Runs at container start and from mail-certs.service after a
 # renewal: a bare reload re-reads this copy, not the mount.
+#
+# MAIL_CERT_DIR names another directory with fullchain.pem and
+# privkey.pem, for a certbot tree mounted whole (its live/<name>/ files
+# are symlinks into archive/, so that directory alone cannot be mounted).
 set -e
 DAEMON="${1:?expected postfix or dovecot}"
 case "$DAEMON" in postfix|dovecot) ;; *) exit 2 ;; esac
-LE_LIVE=/etc/ssl/mail
+LE_LIVE="${MAIL_CERT_DIR:-/etc/ssl/mail}"
 CERT_OUT="/tmp/${DAEMON}-cert"
 
 if [ ! -r "${LE_LIVE}/fullchain.pem" ]; then
